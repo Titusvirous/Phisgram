@@ -1,6 +1,6 @@
 "dependencies": {
-  "axios": "...",
-  "body-parser": "...",
-  "express": "...",
-  "telegraf": "^4.16.3"  // <-- Yeh line wahaan honi chahiye
+  "axios": "^1.6.8",
+  "body-parser": "^1.20.2",
+  "express": "^4.19.2",
+  "telegraf": "^4.16.3"
 }
