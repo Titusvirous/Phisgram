@@ -62,7 +62,6 @@ bot.start(async (ctx) => {
         if (!db.users[userId]) {
             db.users[userId] = { username: username, joinDate: new Date().toISOString() };
             writeDb(db);
-            // NEW FEATURE: Notification for new user
             ctx.telegram.sendMessage(OWNER_ID, `➕ **New User Alert**\n\nUsername: ${username}\nID: ${userId}`);
         }
         
@@ -146,9 +145,7 @@ bot.on('text', async (ctx) => {
                 try {
                     await ctx.telegram.sendMessage(user, text);
                     successCount++;
-                } catch (e) {
-                    console.log(`Failed to send message to user ${user}`);
-                }
+                } catch (e) { console.log(`Failed to send message to user ${user}`); }
             }
             await ctx.reply(`✅ Broadcast sent. Reached ${successCount} users.`);
             break;
@@ -158,7 +155,27 @@ bot.on('text', async (ctx) => {
                 await ctx.reply(`✅ User ${targetId} is now an admin.`);
             } else { await ctx.reply("❌ Invalid ID or user is already an admin."); }
             break;
-        // ... (Baaki saare admin actions ka code waisa hi rahega, bas 'await ctx.reply' use karo) ...
+        case 'remove_admin':
+            if (!isNaN(targetId) && db.admins.includes(targetId)) {
+                if (targetId.toString() === OWNER_ID) return await ctx.reply("❌ You cannot remove the owner.");
+                db.admins = db.admins.filter(id => id !== targetId); writeDb(db);
+                await ctx.reply(`✅ User ${targetId} removed from admins.`);
+            } else { await ctx.reply("❌ Invalid ID or user is not an admin."); }
+            break;
+        case 'block':
+            if (!isNaN(targetId)) {
+                if (isAdmin(targetId)) return await ctx.reply("❌ You cannot block an admin.");
+                if (db.blocked_users.includes(targetId)) return await ctx.reply("❌ User is already blocked.");
+                db.blocked_users.push(targetId); writeDb(db);
+                await ctx.reply(`🚫 User ${targetId} has been blocked.`);
+            } else { await ctx.reply("❌ Invalid ID."); }
+            break;
+        case 'unblock':
+            if (!isNaN(targetId) && db.blocked_users.includes(targetId)) {
+                db.blocked_users = db.blocked_users.filter(id => id !== targetId); writeDb(db);
+                await ctx.reply(`✅ User ${targetId} has been unblocked.`);
+            } else { await ctx.reply("❌ Invalid ID or user is not blocked."); }
+            break;
     }
 });
 
