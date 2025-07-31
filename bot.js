@@ -97,7 +97,6 @@ bot.start(async (ctx) => {
             const adminKeyboard = createAdminKeyboard(db.isApiActive);
             await ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
         } else {
-            // NAYA FIX: Keyboard ab user ko sahi se dikhega
             const userLinkKeyboard = Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1));
             await ctx.replyWithMarkdown(startMessage, userLinkKeyboard);
         }
@@ -126,8 +125,8 @@ bot.on('callback_query', async (ctx) => {
     }
 
     if (isAdmin(userId) && type === 'admin') {
+        let db = readDb();
         if (command === 'toggle' && service === 'api') {
-            const db = readDb();
             db.isApiActive = !db.isApiActive;
             writeDb(db);
             const statusMessage = db.isApiActive ? "API is now ON." : "API is now OFF.";
@@ -159,4 +158,4 @@ bot.launch();
 console.log('🔥 Flawless C2 Engine is online.');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGTERM', '() => bot.stop('SIGTERM'));
