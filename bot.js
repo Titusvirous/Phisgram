@@ -28,10 +28,10 @@ const readDb = () => {
 const writeDb = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 const isAdmin = (id) => readDb().admins.includes(parseInt(id));
 
-// --- NAYA UPGRADE: Markdown Sanitizer ---
-// Yeh function username se saare khaas characters ko neutral kar dega
-const escapeMarkdown = (text) => {
-    return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+// --- NAYA UPGRADE: MarkdownV2 Sanitizer ---
+// Yeh function saare reserved characters ko escape karega
+const escapeMarkdownV2 = (text) => {
+    return text.toString().replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 };
 
 // --- Start Message ---
@@ -72,11 +72,10 @@ bot.start(async (ctx) => {
             db.users[userId] = { username, joinDate: new Date().toISOString() };
             writeDb(db);
             
-            // NAYA FIX: Username ko sanitize karo
-            const safeUsername = escapeMarkdown(username);
-            const notificationText = `*New User Joined*\n\n- *User:* ${safeUsername}\n- *ID:* \`${userId}\``;
+            // NAYA FIX: Username ko sanitize karo aur message ko V2 ke anusaar banao
+            const safeUsername = escapeMarkdownV2(username);
+            const notificationText = `*New User Joined*\n\n\\- *User:* ${safeUsername}\n\\- *ID:* \`${userId}\``;
             
-            // NAYA FIX: MarkdownV2 ka istemal karo
             ctx.telegram.sendMessage(OWNER_ID, notificationText, { parse_mode: 'MarkdownV2' });
         }
 
@@ -96,4 +95,4 @@ bot.start(async (ctx) => {
 // ... (Baaki saara code - callback_query, text handler, stay-alive server - waisa hi rahega) ...
 
 bot.launch();
-console.log('🔥 Toxic Hacker Bot (Sanitized) is online.');
+console.log('🔥 Toxic Hacker Bot (Protocol-Compliant) is online.');
